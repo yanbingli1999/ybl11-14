@@ -9,7 +9,35 @@ export type TileType =
   | 'trap'
   | 'relic'
   | 'torch'
-  | 'chest';
+  | 'chest'
+  | 'chasm';
+
+export type AnchorType = 'entrance' | 'exit' | 'wall';
+
+export interface RopeAnchor {
+  id: string;
+  position: Position;
+  anchorType: AnchorType;
+  placedTurn: number;
+}
+
+export interface RopeConnection {
+  id: string;
+  from: Position;
+  to: Position;
+  length: number;
+  createdAt: number;
+}
+
+export interface RopeState {
+  remainingLength: number;
+  maxLength: number;
+  wear: number;
+  maxWear: number;
+  anchors: RopeAnchor[];
+  activeConnection: RopeConnection | null;
+  broken: boolean;
+}
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -92,6 +120,7 @@ export interface PlayerState {
   inventory: InventoryItem[];
   depth: number;
   torchesRemaining: number;
+  rope: RopeState;
 }
 
 export interface InventoryItem {

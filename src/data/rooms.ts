@@ -143,6 +143,19 @@ export function generateRoomTemplate(depth: number): RoomTemplate {
     }
   }
 
+  const chasmCount = Math.floor(depth / 2) + Math.floor(Math.random() * 3);
+  for (let i = 0; i < chasmCount; i++) {
+    const chasmX = 2 + Math.floor(Math.random() * (width - 4));
+    const chasmY = 1 + Math.floor(Math.random() * (height - 2));
+    if (
+      tiles[chasmY][chasmX] === 'floor' &&
+      !(chasmX === entrance.x && chasmY === entrance.y) &&
+      !(chasmX === exit.x && chasmY === exit.y)
+    ) {
+      tiles[chasmY][chasmX] = 'chasm';
+    }
+  }
+
   return {
     id: `room_depth_${depth}_${Date.now()}`,
     name: `第 ${depth} 层遗迹`,
@@ -166,8 +179,8 @@ export const TUTORIAL_ROOM: RoomTemplate = {
     ['wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall', 'wall'],
     ['wall', 'entrance', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'floor', 'floor', 'exit', 'wall'],
     ['wall', 'floor', 'floor', 'stone', 'floor', 'wall', 'wall', 'floor', 'relic', 'floor', 'floor', 'wall'],
-    ['wall', 'floor', 'floor', 'floor', 'floor', 'door', 'door', 'floor', 'floor', 'floor', 'floor', 'wall'],
-    ['wall', 'floor', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'floor', 'floor', 'floor', 'wall'],
+    ['wall', 'floor', 'floor', 'floor', 'chasm', 'door', 'door', 'chasm', 'floor', 'floor', 'floor', 'wall'],
+    ['wall', 'floor', 'floor', 'floor', 'chasm', 'wall', 'wall', 'chasm', 'floor', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'pressurePlate', 'floor', 'floor', 'wall', 'wall', 'floor', 'pressurePlate', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'floor', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'trap', 'floor', 'floor', 'wall'],

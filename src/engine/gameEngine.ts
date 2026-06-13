@@ -6,6 +6,9 @@ import {
   Position,
   Tile,
   InventoryItem,
+  RopeAnchor,
+  AnchorType,
+  RopeConnection,
 } from '../types/game';
 import { generateRoomTemplate, TUTORIAL_ROOM } from '../data/rooms';
 import { getRandomRelic, RELICS } from '../data/relics';
@@ -26,6 +29,15 @@ export function createInitialPlayer(): PlayerState {
     inventory: [],
     depth: 1,
     torchesRemaining: 5,
+    rope: {
+      remainingLength: 30,
+      maxLength: 30,
+      wear: 0,
+      maxWear: 100,
+      anchors: [],
+      activeConnection: null,
+      broken: false,
+    },
   };
 }
 
@@ -169,6 +181,11 @@ export function movePlayer(game: GameState, direction: Direction): GameState {
     return newGame;
   }
 
+  if (targetTile.type === 'chasm') {
+    newGame.message = '⚠️ 前方是深渊裂隙！无法直接通过，需要使用绳索跨越（按 Q 键跨越相邻裂隙）。';
+    return newGame;
+  }
+
   if (targetTile.type === 'door') {
     const isOpen = targetTile.activated;
     if (!isOpen) {
@@ -255,6 +272,7 @@ export function movePlayer(game: GameState, direction: Direction): GameState {
   checkRelic(newGame);
   checkEntranceExit(newGame);
   updateVisibility(newGame);
+  updateRopeWearFromMovement(newGame);
 
   if (newGame.player.stamina <= 0) {
     newGame.player.stamina = 0;
@@ -688,4 +706,309 @@ export function rest(game: GameState): GameState {
   }
 
   return newGame;
+}
+
+function getChebyshevDistance(a: Position, b: Position): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+function getManhattanDistance(a: Position, b: Position): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+function updateRopeWearFromMovement(game: GameState) {
+  const rope = game.player.rope;
+  if (rope.broken) return;
+
+  const weightRatio = game.player.weight / game.player.maxWeight;
+  if (weightRatio > 0.5) {
+    const baseWear = Math.ceil(weightRatio * 3);
+    rope.wear = Math.min(rope.maxWear, rope.wear + baseWear);
+
+    if (rope.wear >= rope.maxWear && !rope.broken) {
+      rope.broken = true;
+      rope.activeConnection = null;
+      game.message = '💥 绳索因负重过大而断裂！所有锚点和连接失效。';
+    } else if (rope.wear >= rope.maxWear * 0.8 && weightRatio > 0.7) {
+      if (!game.message.includes('绳索') && Math.random() < 0.3) {
+        game.message = '⚠️ 绳索发出危险的吱嘎声，磨损严重！考虑丢弃一些重物。';
+      }
+    }
+  }
+}
+
+function isAdjacentToWall(game: GameState, pos: Position): boolean {
+  const directions = [
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
+    { dx: -1, dy: 0 },
+    { dx: 1, dy: 0 },
+  ];
+  for (const dir of directions) {
+    const nx = pos.x + dir.dx;
+    const ny = pos.y + dir.dy;
+    if (nx < 0 || nx >= game.room.width || ny < 0 || ny >= game.room.height) continue;
+    if (game.room.tiles[ny][nx].type === 'wall') {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function placeRopeAnchor(game: GameState): GameState {
+  if (game.status !== 'exploring' && game.status !== 'escaping') return game;
+
+  const newGame = deepClone(game);
+  const { x, y } = newGame.player.position;
+  const tile = newGame.room.tiles[y][x];
+
+  if (newGame.player.rope.broken) {
+    newGame.message = '💥 绳索已经断裂，无法再放置锚点！';
+    return newGame;
+  }
+
+  let anchorType: AnchorType | null = null;
+
+  if (tile.type === 'entrance') {
+    anchorType = 'entrance';
+  } else if (tile.type === 'exit') {
+    anchorType = 'exit';
+  } else if (isAdjacentToWall(newGame, { x, y })) {
+    anchorType = 'wall';
+  }
+
+  if (!anchorType) {
+    newGame.message = '❌ 此处无法固定绳索！需要站在入口🚪、出口⬆️或紧贴坚固墙🧱旁边。';
+    return newGame;
+  }
+
+  const existingAnchor = newGame.player.rope.anchors.find(
+    (a) => a.position.x === x && a.position.y === y
+  );
+  if (existingAnchor) {
+    newGame.message = '📍 这里已经有一个绳索锚点了。';
+    return newGame;
+  }
+
+  const anchorCost = 2;
+  if (newGame.player.rope.remainingLength < anchorCost) {
+    newGame.message = '❌ 绳索长度不足！至少需要2个单位长度来固定锚点。';
+    return newGame;
+  }
+
+  const newAnchor: RopeAnchor = {
+    id: `anchor_${Date.now()}_${Math.random()}`,
+    position: { x, y },
+    anchorType,
+    placedTurn: newGame.turn,
+  };
+
+  newGame.player.rope.anchors.push(newAnchor);
+  newGame.player.rope.remainingLength -= anchorCost;
+  newGame.turn += 1;
+
+  const typeNames: Record<AnchorType, string> = {
+    entrance: '入口🚪',
+    exit: '出口⬆️',
+    wall: '坚固墙🧱',
+  };
+  newGame.message = `✅ 成功在${typeNames[anchorType]}处固定绳索锚点📍！消耗2单位，剩余${newGame.player.rope.remainingLength}。`;
+
+  return newGame;
+}
+
+export function crossChasmWithRope(game: GameState, direction: Direction): GameState {
+  if (game.status !== 'exploring' && game.status !== 'escaping') return game;
+
+  const newGame = deepClone(game);
+
+  if (newGame.player.rope.broken) {
+    newGame.message = '💥 绳索已断裂，无法跨越裂隙！';
+    return newGame;
+  }
+
+  const offset = getDirectionOffset(direction);
+  const chasmPos = {
+    x: newGame.player.position.x + offset.x,
+    y: newGame.player.position.y + offset.y,
+  };
+  const landingPos = {
+    x: newGame.player.position.x + offset.x * 2,
+    y: newGame.player.position.y + offset.y * 2,
+  };
+
+  if (
+    chasmPos.x < 0 || chasmPos.x >= newGame.room.width ||
+    chasmPos.y < 0 || chasmPos.y >= newGame.room.height
+  ) {
+    newGame.message = '那个方向没有可以跨越的裂隙。';
+    return newGame;
+  }
+
+  const chasmTile = newGame.room.tiles[chasmPos.y][chasmPos.x];
+  if (chasmTile.type !== 'chasm') {
+    newGame.message = '那个方向没有裂隙。按Q键后，选择方向来跨越相邻裂隙🕳️。';
+    return newGame;
+  }
+
+  if (
+    landingPos.x < 0 || landingPos.x >= newGame.room.width ||
+    landingPos.y < 0 || landingPos.y >= newGame.room.height
+  ) {
+    newGame.message = '⚠️ 裂隙对面没有可落脚的地方，太危险了！';
+    return newGame;
+  }
+
+  const landingTile = newGame.room.tiles[landingPos.y][landingPos.x];
+  if (
+    landingTile.type === 'wall' ||
+    landingTile.type === 'chasm' ||
+    (landingTile.type === 'door' && !landingTile.activated) ||
+    landingTile.type === 'stone'
+  ) {
+    newGame.message = '⚠️ 裂隙对面被阻挡（墙/石头/锁门），无法跨越！';
+    return newGame;
+  }
+
+  const crossCost = 3;
+  if (newGame.player.rope.remainingLength < crossCost) {
+    newGame.message = `❌ 绳索不足！跨越裂隙需要${crossCost}单位，只剩${newGame.player.rope.remainingLength}。`;
+    return newGame;
+  }
+
+  if (newGame.player.stamina < 5) {
+    newGame.message = '体力不足，无法撑杆跨越裂隙！';
+    return newGame;
+  }
+
+  newGame.player.rope.remainingLength -= crossCost;
+  newGame.player.stamina -= 5;
+  newGame.player.position = landingPos;
+  newGame.turn += 1;
+
+  const weightRatio = newGame.player.weight / newGame.player.maxWeight;
+  const crossWear = Math.ceil(5 + weightRatio * 10);
+  newGame.player.rope.wear = Math.min(newGame.player.rope.maxWear, newGame.player.rope.wear + crossWear);
+
+  if (newGame.player.rope.wear >= newGame.player.rope.maxWear) {
+    newGame.player.rope.broken = true;
+    newGame.player.rope.activeConnection = null;
+    newGame.message = '💥 跨越成功！但绳索因负重过大在最后一刻断裂！';
+  } else {
+    newGame.message = `✅ 成功用绳索跨越裂隙！消耗${crossCost}单位，剩余${newGame.player.rope.remainingLength}。`;
+  }
+
+  checkTrap(newGame);
+  checkRelic(newGame);
+  checkEntranceExit(newGame);
+  updateVisibility(newGame);
+
+  return newGame;
+}
+
+export function travelToAnchor(game: GameState, anchorId: string): GameState {
+  if (game.status !== 'exploring' && game.status !== 'escaping') return game;
+
+  const newGame = deepClone(game);
+
+  if (newGame.player.rope.broken) {
+    newGame.message = '💥 绳索已断裂，无法快速移动！';
+    return newGame;
+  }
+
+  const anchor = newGame.player.rope.anchors.find((a) => a.id === anchorId);
+  if (!anchor) {
+    newGame.message = '锚点不存在。';
+    return newGame;
+  }
+
+  const distance = getManhattanDistance(newGame.player.position, anchor.position);
+  const travelCost = Math.ceil(distance * 0.5);
+
+  if (distance <= 1) {
+    newGame.message = '你已经在锚点旁边了。';
+    return newGame;
+  }
+
+  if (newGame.player.rope.remainingLength < travelCost) {
+    newGame.message = `❌ 绳索不足！快速移动到锚点需要${travelCost}单位，只剩${newGame.player.rope.remainingLength}。距离：${distance}格。`;
+    return newGame;
+  }
+
+  if (newGame.player.stamina < Math.ceil(distance * 0.3)) {
+    newGame.message = '体力不足，无法沿着绳索快速移动！';
+    return newGame;
+  }
+
+  newGame.player.rope.remainingLength -= travelCost;
+  newGame.player.stamina -= Math.ceil(distance * 0.3);
+  newGame.player.position = { ...anchor.position };
+  newGame.turn += Math.ceil(distance / 3);
+
+  const weightRatio = newGame.player.weight / newGame.player.maxWeight;
+  const travelWear = Math.ceil(distance * (0.5 + weightRatio));
+  newGame.player.rope.wear = Math.min(newGame.player.rope.maxWear, newGame.player.rope.wear + travelWear);
+
+  newGame.player.rope.activeConnection = {
+    id: `conn_${Date.now()}`,
+    from: { ...newGame.player.position },
+    to: { ...anchor.position },
+    length: distance,
+    createdAt: newGame.turn,
+  };
+
+  if (newGame.player.rope.wear >= newGame.player.rope.maxWear) {
+    newGame.player.rope.broken = true;
+    newGame.player.rope.activeConnection = null;
+    newGame.message = `💥 成功到达锚点！但绳索已到达极限磨损度并断裂。之前路程：${distance}格。`;
+  } else {
+    const typeNames: Record<AnchorType, string> = {
+      entrance: '入口🚪',
+      exit: '出口⬆️',
+      wall: '坚固墙🧱',
+    };
+    newGame.message = `✅ 沿绳索快速滑到${typeNames[anchor.anchorType]}锚点！距离${distance}格，消耗${travelCost}绳长。`;
+  }
+
+  checkTrap(newGame);
+  checkRelic(newGame);
+  checkEntranceExit(newGame);
+  updateVisibility(newGame);
+
+  return newGame;
+}
+
+export function removeRopeAnchor(game: GameState, anchorId: string): GameState {
+  if (game.status !== 'exploring' && game.status !== 'escaping') return game;
+
+  const newGame = deepClone(game);
+  const anchorIndex = newGame.player.rope.anchors.findIndex((a) => a.id === anchorId);
+
+  if (anchorIndex === -1) {
+    newGame.message = '锚点不存在。';
+    return newGame;
+  }
+
+  const anchor = newGame.player.rope.anchors[anchorIndex];
+  const distance = getChebyshevDistance(newGame.player.position, anchor.position);
+
+  if (distance > 1) {
+    newGame.message = '❌ 必须站在锚点旁边才能回收它！';
+    return newGame;
+  }
+
+  newGame.player.rope.anchors.splice(anchorIndex, 1);
+  const refund = 1;
+  newGame.player.rope.remainingLength = Math.min(
+    newGame.player.rope.maxLength,
+    newGame.player.rope.remainingLength + refund
+  );
+  newGame.turn += 1;
+
+  newGame.message = `♻️ 已拆除锚点并回收${refund}单位绳索。当前剩余：${newGame.player.rope.remainingLength}。`;
+  return newGame;
+}
+
+export function listNearbyAnchors(game: GameState): RopeAnchor[] {
+  return game.player.rope.anchors;
 }

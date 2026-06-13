@@ -130,6 +130,40 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
           marginTop: '16px',
           paddingTop: '16px',
           borderTop: '1px solid #3d3d5c',
+        }}
+      >
+        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#c0c0ff', marginBottom: '8px' }}>
+          🪢 绳索状态
+        </div>
+        <StatBar
+          label="绳长"
+          value={player.rope.remainingLength}
+          max={player.rope.maxLength}
+          color={player.rope.broken ? '#6b7280' : '#60a5fa'}
+          icon="📏"
+        />
+        <StatBar
+          label="磨损"
+          value={player.rope.wear}
+          max={player.rope.maxWear}
+          color={
+            player.rope.wear > 80 ? '#ef4444' : player.rope.wear > 50 ? '#fbbf24' : '#4ade80'
+          }
+          icon="⚠️"
+        />
+        <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>
+          📍 锚点数: <strong>{player.rope.anchors.length}</strong>
+          {player.rope.broken && (
+            <span style={{ color: '#ef4444', marginLeft: '8px' }}>💥 已断裂</span>
+          )}
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: '16px',
+          paddingTop: '16px',
+          borderTop: '1px solid #3d3d5c',
           fontSize: '14px',
         }}
       >

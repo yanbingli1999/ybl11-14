@@ -12,6 +12,10 @@ import {
   dropItem,
   calculateEscapeValue,
   interact,
+  placeRopeAnchor,
+  travelToAnchor,
+  removeRopeAnchor,
+  crossChasmWithRope,
 } from '../engine/gameEngine';
 import { GameBoard } from '../components/GameBoard';
 import { StatusPanel } from '../components/StatusPanel';
@@ -48,6 +52,7 @@ function loadInitialState(): GameState {
 export const GamePage: React.FC = () => {
   const [game, setGame] = useState<GameState>(() => loadInitialState());
   const [showRecords, setShowRecords] = useState(false);
+  const [crossChasmMode, setCrossChasmMode] = useState(false);
   const [restoredFromSave, setRestoredFromSave] = useState(() => {
     try {
       const saved = loadSavedGame();
@@ -87,6 +92,34 @@ export const GamePage: React.FC = () => {
   const handleInteract = useCallback(() => {
     setGame((prev) => interact(prev));
   }, []);
+
+  const handlePlaceAnchor = useCallback(() => {
+    setGame((prev) => placeRopeAnchor(prev));
+  }, []);
+
+  const handleTravelToAnchor = useCallback((anchorId: string) => {
+    setGame((prev) => travelToAnchor(prev, anchorId));
+  }, []);
+
+  const handleRemoveAnchor = useCallback((anchorId: string) => {
+    setGame((prev) => removeRopeAnchor(prev, anchorId));
+  }, []);
+
+  const handleToggleCrossChasm = useCallback(() => {
+    setCrossChasmMode((prev) => !prev);
+  }, []);
+
+  const handleMoveOrCross = useCallback(
+    (direction: Direction) => {
+      if (crossChasmMode) {
+        setGame((prev) => crossChasmWithRope(prev, direction));
+        setCrossChasmMode(false);
+      } else {
+        setGame((prev) => movePlayer(prev, direction));
+      }
+    },
+    [crossChasmMode]
+  );
 
   const handleRestart = useCallback(() => {
     try {
@@ -176,25 +209,25 @@ export const GamePage: React.FC = () => {
         case 'w':
         case 'W':
           e.preventDefault();
-          handleMove('up');
+          handleMoveOrCross('up');
           break;
         case 'ArrowDown':
         case 's':
         case 'S':
           e.preventDefault();
-          handleMove('down');
+          handleMoveOrCross('down');
           break;
         case 'ArrowLeft':
         case 'a':
         case 'A':
           e.preventDefault();
-          handleMove('left');
+          handleMoveOrCross('left');
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
           e.preventDefault();
-          handleMove('right');
+          handleMoveOrCross('right');
           break;
         case 'f':
         case 'F':
@@ -207,6 +240,16 @@ export const GamePage: React.FC = () => {
             e.preventDefault();
             handleRest();
           }
+          break;
+        case 'e':
+        case 'E':
+          e.preventDefault();
+          handlePlaceAnchor();
+          break;
+        case 'q':
+        case 'Q':
+          e.preventDefault();
+          handleToggleCrossChasm();
           break;
       }
 
@@ -221,11 +264,13 @@ export const GamePage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     game.status,
-    handleMove,
+    handleMoveOrCross,
     handleUseTorch,
     handleRest,
     handleRestart,
     handleInteract,
+    handlePlaceAnchor,
+    handleToggleCrossChasm,
   ]);
 
   const canAppraise = game.player.stamina >= 10;
@@ -350,12 +395,17 @@ export const GamePage: React.FC = () => {
             />
             <ControlPanel
               game={game}
-              onMove={handleMove}
+              onMove={handleMoveOrCross}
               onUseTorch={handleUseTorch}
               onRest={handleRest}
               onNextFloor={handleNextFloor}
               onStartEscape={handleStartEscape}
               onRestart={handleRestart}
+              onPlaceAnchor={handlePlaceAnchor}
+              onTravelToAnchor={handleTravelToAnchor}
+              onRemoveAnchor={handleRemoveAnchor}
+              crossChasmMode={crossChasmMode}
+              onToggleCrossChasm={handleToggleCrossChasm}
             />
           </div>
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameState } from '../types/game';
+import { GameState, RopeAnchor, AnchorType } from '../types/game';
 
 interface GameBoardProps {
   game: GameState;
@@ -19,6 +19,13 @@ const tileIcons: Record<string, string> = {
   relic: '💎',
   torch: '🔥',
   chest: '📦',
+  chasm: '🕳️',
+};
+
+const anchorIcons: Record<AnchorType, string> = {
+  entrance: '⚓',
+  exit: '⚓',
+  wall: '📍',
 };
 
 export const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
@@ -65,6 +72,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
       case 'pressurePlate':
         bgColor = tile.activated ? '#4a7a4a' : '#5a5a5a';
         break;
+      case 'chasm':
+        bgColor = '#0a0a14';
+        break;
       default:
         bgColor = tile.lit ? '#5a5a7a' : '#3d3d5c';
     }
@@ -81,6 +91,20 @@ export const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
 
     if (!tile.visible && !tile.explored) {
       return null;
+    }
+
+    const anchor = player.rope.anchors.find(
+      (a) => a.position.x === x && a.position.y === y
+    );
+    if (anchor && tile.visible) {
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span>{tileIcons[tile.type] || ''}</span>
+          <span style={{ position: 'absolute', fontSize: '14px', top: '-2px', right: '-2px', filter: 'drop-shadow(0 0 2px #a855f7)' }}>
+            {anchorIcons[anchor.anchorType]}
+          </span>
+        </div>
+      );
     }
 
     const trap = room.traps.find(
@@ -111,6 +135,56 @@ export const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
     return tileIcons[tile.type] || '';
   };
 
+  const boardWidth = room.width * TILE_SIZE + (room.width - 1) * 1 + 4 + 6;
+  const boardHeight = room.height * TILE_SIZE + (room.height - 1) * 1 + 4 + 6;
+
+  const renderRopeLines = () => {
+    if (player.rope.anchors.length === 0) return null;
+
+    const lines: JSX.Element[] = [];
+    const px = player.position.x * (TILE_SIZE + 1) + TILE_SIZE / 2 + 2 + 3;
+    const py = player.position.y * (TILE_SIZE + 1) + TILE_SIZE / 2 + 2 + 3;
+
+    player.rope.anchors.forEach((anchor, idx) => {
+      const ax = anchor.position.x * (TILE_SIZE + 1) + TILE_SIZE / 2 + 2 + 3;
+      const ay = anchor.position.y * (TILE_SIZE + 1) + TILE_SIZE / 2 + 2 + 3;
+
+      const dist = Math.abs(anchor.position.x - player.position.x) + Math.abs(anchor.position.y - player.position.y);
+      const opacity = player.rope.broken ? 0.2 : Math.max(0.3, 1 - dist * 0.03);
+      const color = player.rope.wear > 80 ? '#ef4444' : player.rope.wear > 50 ? '#fbbf24' : '#a855f7';
+
+      lines.push(
+        <line
+          key={`rope-${idx}`}
+          x1={px}
+          y1={py}
+          x2={ax}
+          y2={ay}
+          stroke={color}
+          strokeWidth={2}
+          strokeDasharray={player.rope.broken ? '4 4' : '6 3'}
+          opacity={opacity}
+        />
+      );
+    });
+
+    return (
+      <svg
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: boardWidth,
+          height: boardHeight,
+          pointerEvents: 'none',
+          zIndex: 5,
+        }}
+      >
+        {lines}
+      </svg>
+    );
+  };
+
   return (
     <div
       style={{
@@ -120,10 +194,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
         padding: '20px',
         backgroundColor: '#1a1a2e',
         borderRadius: '8px',
+        position: 'relative',
       }}
     >
       <div
         style={{
+          position: 'relative',
           display: 'grid',
           gridTemplateColumns: `repeat(${room.width}, ${TILE_SIZE}px)`,
           gap: '1px',
@@ -133,6 +209,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ game }) => {
           padding: '2px',
         }}
       >
+        {renderRopeLines()}
         {room.tiles.map((row, y) =>
           row.map((tile, x) => (
             <div key={`${x}-${y}`} style={getTileStyle(tile, x, y)}>
