@@ -479,12 +479,17 @@ export function nextFloor(game: GameState): GameState {
   newGame.room = newRoom;
   newGame.player.position = { ...newRoom.entrance };
 
+  newGame.player.rope.anchors = [];
+  newGame.player.rope.activeConnection = null;
+  newGame.player.rope.wear = 0;
+  newGame.player.rope.broken = false;
+
   newGame.player.stamina = Math.min(
     newGame.player.maxStamina,
     newGame.player.stamina + 20
   );
 
-  newGame.message = `进入第 ${newGame.player.depth} 层！体力恢复了一些。`;
+  newGame.message = `进入第 ${newGame.player.depth} 层！体力恢复了一些，旧锚点已重置。`;
   newGame.turn += 1;
 
   updateVisibility(newGame);
@@ -824,6 +829,11 @@ export function crossChasmWithRope(game: GameState, direction: Direction): GameS
 
   if (newGame.player.rope.broken) {
     newGame.message = '💥 绳索已断裂，无法跨越裂隙！';
+    return newGame;
+  }
+
+  if (newGame.player.rope.anchors.length === 0) {
+    newGame.message = '⚠️ 还没有固定任何绳索锚点！请先按 E 键在入口🚪、出口⬆️或墙根🧱处固定锚点。';
     return newGame;
   }
 

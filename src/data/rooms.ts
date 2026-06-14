@@ -180,7 +180,7 @@ export const TUTORIAL_ROOM: RoomTemplate = {
     ['wall', 'entrance', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'floor', 'floor', 'exit', 'wall'],
     ['wall', 'floor', 'floor', 'stone', 'floor', 'wall', 'wall', 'floor', 'relic', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'floor', 'floor', 'chasm', 'door', 'door', 'chasm', 'floor', 'floor', 'floor', 'wall'],
-    ['wall', 'floor', 'floor', 'floor', 'chasm', 'wall', 'wall', 'chasm', 'floor', 'floor', 'floor', 'wall'],
+    ['wall', 'floor', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'floor', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'pressurePlate', 'floor', 'floor', 'wall', 'wall', 'floor', 'pressurePlate', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'floor', 'floor', 'floor', 'wall'],
     ['wall', 'floor', 'floor', 'floor', 'floor', 'wall', 'wall', 'floor', 'trap', 'floor', 'floor', 'wall'],
